@@ -1,0 +1,187 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+#from matplotlib import pyplot as plt
+
+%matplotlib inline
+
+#from sklearn.linear_model import LinearRegression
+from sklearn.cluster import KMeans
+
+path = r"C:\kursy\ML_w_Pythonie_Podstawy_perceptron_regresja\course_data_files\Airbnb listings in Ottawa (May 2016)\Airbnb listings in Ottawa (May 2016).csv"
+
+
+df_b_b = pd.read_csv(path,sep=',')
+#print(df_b_b.head())
+print(df_b_b.shape)
+
+df_coordinates = df_b_b.loc[:,['longitude','latitude']]
+
+print(df_coordinates.head())
+print(df_coordinates.shape)
+
+x= df_coordinates.loc[:,'longitude']
+y= df_coordinates.loc[:,'latitude']
+
+plt.figure()
+plt.scatter(x, y)
+plt.show()
+
+# within-cluster-sum-of-squares
+# suma kwadratów odległoci dzielona przez iloć punktow
+
+print(df_coordinates)
+
+WCSS = []
+
+# k - ilosc gróp na ile dzielimy zbior (dane)
+# im więcej gróp tym mniejszy WCSS
+# The n_init parameter determines the number of time the k-means algorithm will be run with different centroid seeds.
+
+ilosc_Klastrów =15
+
+for k in range(1, ilosc_Klastrów + 1):
+    kmeans= KMeans(n_clusters= k, n_init=10 )
+    kmeans.fit(df_coordinates)
+    WCSS.append(kmeans.inertia_)
+    
+print('WCSS ',WCSS)
+
+plt.figure()
+wartosci_x =range(1,ilosc_Klastrów +1)
+wartosci_y = WCSS
+
+plt.plot(wartosci_x , wartosci_y)
+plt.xlabel("Number of K Value(Cluster)")
+plt.ylabel("WCSS \n suma kwadratów odległoci na klaster")
+plt.title("elbow chart")
+plt.grid()
+plt.show()
+
+
+df_WCSS = pd.DataFrame(WCSS,columns =['WCSS'])
+#df_WCSS['%']=np.nan
+df_WCSS['%']= -df_WCSS['WCSS'].pct_change()*100
+
+plt.figure()
+wartosci_x =range(1,ilosc_Klastrów +1)
+wartosci_y = df_WCSS['%']
+plt.bar(wartosci_x , wartosci_y)
+plt.xlabel("Number of K Value(Cluster)")
+plt.ylabel('zmiana w %')
+plt.title("elbow chart")
+plt.grid()
+plt.show()
+
+# wykres ma kształt ramienia opartego o krzesło i nazywa się go 
+# elbow z wykresu wyszukujemy miejsce przełamania łokcia 
+# w celu znalezienia najlepszej ilosci clusters
+
+# kmeans - model ktory dzieli dane na 5 grop 
+n_clusters_=8
+kmeans= KMeans(n_clusters=n_clusters_,max_iter=800,random_state=1)
+clusters = kmeans.fit_predict(df_coordinates)
+# labels tablica przechowuje nr klastra do którego ta próbka została zakwalifikowana
+labels = kmeans.labels_
+print("labels\n", labels)
+# centroids centralne punkty każdej grópy(klastra)
+centroids = kmeans.cluster_centers_
+
+print("centroids\n", centroids)
+
+# h zmienna przechowująca dokładnosc z jaka jest przypisywany punkt do kazdej z gróp 
+h = 0.001
+x_min, x_max = df_coordinates['longitude'].min(),df_coordinates['longitude'].max()
+y_min, y_max = df_coordinates['latitude'].min(),df_coordinates['latitude'].max()
+print("x_min\n",x_min,"\n","x_max\n",x_max)
+
+# xx, yy macierz wszystkich punktów z wykresu
+# np.arange(x_min,x_max, h ) bieze x_min i dodaje h takdługo aż dojdzie po 
+# dodaniu przekroczy lub bedzie równe x_max
+xx, yy = np.meshgrid(np.arange(x_min,x_max, h ), np.arange(y_min,y_max, h ))
+print("xx\n",xx,"\n","yy\n",yy)
+print(yy.shape)
+# Z wynik wszystkich predykcji z tablic xx i yy
+# najpierw znaźlimy najbardziej oddalone od siebie punkty puźniej 
+# stworzylismy siatkę punktów opierającą się o te ekstrema i skok pomiędzy nimi h
+# a teraz sprawdzamy do którego klastera będzie przypisany każdy z punktów siatki
+Z = kmeans.predict(np.c_[xx.ravel() , yy.ravel()])
+print("Z.shape_1 ",Z.shape)
+print("Z.shape_1/417 ",Z.shape[0]/417)
+plt.figure(1, figsize=(10,4))
+plt.clf()
+
+Z = Z.reshape(xx.shape)
+print("Z.shape_2 ",Z.shape)
+# imshow wysowuje granice decyzyjne
+plt.imshow(Z, interpolation="nearest", 
+           extent=(xx.min(), xx.max(), yy.min(),yy.max() ),
+           cmap = plt.cm.Pastel1, origin='lower' )
+
+plt.scatter(x, y, c=labels,s=100)
+x_centroids, y_centroids = centroids[:,0],centroids[:,1]
+lista_colors = np.arange(0.,len(x_centroids),1)
+print(lista_colors)
+
+plt.scatter(x_centroids, y_centroids, c= lista_colors  ,cmap ="Greys", 
+            edgecolors='black',s=300)
+cbar = plt.colorbar()
+cbar.set_label('k nr')
+
+plt.show()
+ 
+df_coordinates['labels']=labels
+
+
+centroid_x_dict = {}
+centroid_y_dict = {}
+
+for row in range(0,len(centroids)) :
+    centroid_x_dict[row]= centroids[row,0]
+    centroid_y_dict[row]= centroids[row,1]
+    
+# =============================================================================
+# print (centroid_x_dict)
+# print (centroid_y_dict)
+# =============================================================================
+
+
+df_coordinates['centroid_x'] = df_coordinates['labels'].apply(lambda key_ : centroid_x_dict[key_])
+df_coordinates['centroid_y'] = df_coordinates['labels'].apply(lambda key_ : centroid_y_dict[key_])
+df_coordinates['odl']= ((df_coordinates['longitude']- df_coordinates['centroid_x'])**2 + 
+                (df_coordinates['latitude']- df_coordinates['centroid_y'])**2)**0.5
+df_coordinates['WCSS']= ((df_coordinates['longitude']- df_coordinates['centroid_x'])**2 + 
+                (df_coordinates['latitude']- df_coordinates['centroid_y'])**2)
+
+print('df_coordinates ')
+print(df_coordinates.pivot_table(index='labels',values=['WCSS','odl'],aggfunc = ['sum','count']))
+
+
+
+#-----------------------------------------------------------------------------------
+df_zestawienie_koncowe = pd.DataFrame(columns=['l.kl', 'WCSS','odl', 'ilosc pkt'])
+
+df_zestawienie_koncowe['l.kl']= df_zestawienie_koncowe['l.kl'].astype('int')
+df_zestawienie_koncowe['WCSS']= df_zestawienie_koncowe['WCSS'].astype('float')
+df_zestawienie_koncowe['ilosc pkt']= df_zestawienie_koncowe['ilosc pkt'].astype('int')
+
+
+suma_odleglosci =0
+suma_wcss =0
+for nr_label in range(0,n_clusters_):
+    filtr = df_coordinates['labels']== nr_label
+    
+    df_zestawienie_koncowe.loc[len(df_zestawienie_koncowe)] = [
+         nr_label+1,
+         df_coordinates.loc[filtr, 'WCSS'].sum(),
+         df_coordinates.loc[filtr, 'odl'].sum(),
+         df_coordinates.loc[filtr, 'odl'].count()
+         ]
+    suma_odleglosci += df_coordinates.loc[filtr,'odl'].sum()
+    suma_wcss += df_coordinates.loc[filtr,'WCSS'].sum()
+df_zestawienie_koncowe.set_index('l.kl',inplace=True)
+
+
+print('\n df_zestawienie_koncowe \n',df_zestawienie_koncowe )
+print('\nsuma_odleglosci =',suma_odleglosci )
+print('suma_wcss =',suma_wcss )
